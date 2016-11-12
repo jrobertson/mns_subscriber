@@ -4,17 +4,27 @@
 
 
 require 'sps-sub'
-require 'dynarex'
 require "sqlite3"
 require 'fileutils'
+require 'daily_notices'
 
 
 class MNSSubscriber < SPSSub
 
-  def initialize(host: 'sps', port: 59000, dir: '.', timeline_xsl: nil)
+  def initialize(host: 'sps', port: 59000, dir: '.', options: {})
+    
+    # note: a valid url_base must be provided
+    
+    @options = {
+      url_base: 'http://yourwebsitehere.co.uk/', 
+      dx_xslt: '/xsl/dynarex.xsl', 
+      rss_xslt: '/xsl/feed.xsl', 
+      target_page: :page, 
+      target_xslt: '/xsl/page.xsl'
+    }.merge(options)
 
     super(host: host, port: port)
-    @filepath, @timeline_xsl = dir, timeline_xsl
+    @filepath = dir
 
   end
 
@@ -36,39 +46,26 @@ class MNSSubscriber < SPSSub
   def add_notice(topic, msg)
 
     topic_dir = File.join(@filepath, topic)
-    filename = File.join(topic_dir, topic + '.xml')
+    filename = File.join(topic_dir, 'feed.xml')
 
     db = SQLite3::Database.new File.join(topic_dir, topic + '.db')    
     
-    dx = if File.exists? filename then
+    unless File.exists? filename then
 
-      Dynarex.new(filename)
-      
-      
-    else
-
-      FileUtils.mkdir_p File.dirname(filename)
-      dx = Dynarex.new('notices[identity]/notice(message)')
-      dx.identity = topic
-      dx.xslt = @timeline_xsl if @timeline_xsl
-      
-      
 db.execute <<-SQL
   create table notices (
     ID INT PRIMARY KEY     NOT NULL,
     MESSAGE TEXT
   );
 SQL
-
-      dx
-
+            
     end
+   
     
-    id = Time.now.to_i
-    dx.create message: msg, id: id
-    
-    dx.save filename
-    puts "%s: saved file %s" % [Time.now, filename]
+    id = Time.now.to_i.to_s    
+
+    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)
+    notices.add msg, id: id
 
     db.execute("INSERT INTO notices (id, message) 
             VALUES (?, ?)", [id, msg])    
@@ -76,4 +73,3 @@ SQL
   end  
 
 end
-
