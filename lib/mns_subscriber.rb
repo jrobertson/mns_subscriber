@@ -36,22 +36,48 @@ class MNSSubscriber < SPSSub
 
   def ontopic(topic, msg)
 
-    subtopic = topic.split('/').last
+    a = topic.split('/')
     puts "%s: %s %s"  % [topic, Time.now.to_s, msg.inspect]
+    
+    
+    case a.last
+      
+    when 'profile'
+          
+      update_attributes(:description, subtopic=a[-2], profile=msg)
 
-    add_notice(subtopic, msg)
+    when 'link'
+          
+      update_attributes(:link, subtopic=a[-2], link=msg)
+      
+    when 'title'
+          
+      update_attributes(:title, subtopic=a[-2], title=msg)
+      
+    else
+      
+      subtopic = a.last
+      add_notice(subtopic, msg)
+      
+    end    
 
   end
 
   def add_notice(topic, msg)
 
     topic_dir = File.join(@filepath, topic)
-    filename = File.join(topic_dir, 'feed.xml')
+    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)    
 
-    db = SQLite3::Database.new File.join(topic_dir, topic + '.db')    
+    dbfilename = File.join(topic_dir, topic + '.db')
     
-    unless File.exists? filename then
+    if File.exists? dbfilename then
 
+      db = SQLite3::Database.new dbfilename   
+      
+    else
+
+      db = SQLite3::Database.new dbfilename   
+      
 db.execute <<-SQL
   create table notices (
     ID INT PRIMARY KEY     NOT NULL,
@@ -64,12 +90,20 @@ SQL
     
     id = Time.now.to_i.to_s    
 
-    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)
     notices.add msg, id: id
 
     db.execute("INSERT INTO notices (id, message) 
             VALUES (?, ?)", [id, msg])    
     
-  end  
+  end
+
+  def update_attributes(attribute, topic, value)
+    
+    topic_dir = File.join(@filepath, topic)
+    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)              
+    notices.method((attribute.to_s + '=').to_sym).call(value)
+    notices.save
+  
+  end
 
 end
