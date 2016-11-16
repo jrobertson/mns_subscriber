@@ -66,7 +66,13 @@ class MNSSubscriber < SPSSub
   def add_notice(topic, msg)
 
     topic_dir = File.join(@filepath, topic)
-    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)    
+    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)
+        
+    id = Time.now.to_i.to_s
+
+    return_status = notices.add msg, id: id
+    
+    return if return_status == :duplicate
 
     dbfilename = File.join(topic_dir, topic + '.db')
     
@@ -87,10 +93,7 @@ SQL
             
     end
    
-    
-    id = Time.now.to_i.to_s    
 
-    notices.add msg, id: id
 
     db.execute("INSERT INTO notices (id, message) 
             VALUES (?, ?)", [id, msg])    
