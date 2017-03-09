@@ -92,11 +92,14 @@ db.execute <<-SQL
 SQL
             
     end
-   
-
-
+    
+  
     db.execute("INSERT INTO notices (id, message) 
             VALUES (?, ?)", [id, msg])    
+    
+    self.notice "timeline/add: %s/status/%s"  % [topic, id] 
+    
+    sleep 1.5
     
   end
 
