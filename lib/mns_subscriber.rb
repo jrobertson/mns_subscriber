@@ -11,7 +11,8 @@ require 'daily_notices'
 
 class MNSSubscriber < SPSSub
 
-  def initialize(host: 'sps', port: 59000, dir: '.', options: {})
+  def initialize(host: 'sps', port: 59000, dir: '.', options: {}, 
+                 timeline: 'timeline')
     
     # note: a valid url_base must be provided
     
@@ -20,11 +21,11 @@ class MNSSubscriber < SPSSub
       dx_xslt: '/xsl/dynarex.xsl', 
       rss_xslt: '/xsl/feed.xsl', 
       target_page: :page, 
-      target_xslt: '/xsl/page.xsl'
+      target_xslt: '/xsl/page.xsl'      
     }.merge(options)
 
     super(host: host, port: port)
-    @filepath = dir
+    @filepath, @timeline = dir, timeline
 
   end
 
@@ -66,11 +67,14 @@ class MNSSubscriber < SPSSub
   def add_notice(topic, msg)
 
     topic_dir = File.join(@filepath, topic)
-    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)
+    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic, 
+                                    title: topic.capitalize + ' daily notices')
+    
+    
         
     id = Time.now.to_i.to_s
 
-    return_status = notices.add msg, id: id
+    return_status = notices.add({description: msg, topic: topic}, id: id)        
     
     return if return_status == :duplicate
 
@@ -97,7 +101,7 @@ SQL
     db.execute("INSERT INTO notices (id, message) 
             VALUES (?, ?)", [id, msg])    
     
-    self.notice "timeline/add: %s/status/%s"  % [topic, id] 
+    self.notice "%s/add: %s/status/%s"  % [@timeline, topic, id] 
     
     sleep 1.5
     
