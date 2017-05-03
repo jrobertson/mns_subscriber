@@ -12,7 +12,7 @@ require 'daily_notices'
 class MNSSubscriber < SPSSub
 
   def initialize(host: 'sps', port: 59000, dir: '.', options: {}, 
-                 timeline: 'timeline')
+                 timeline: nil)
     
     # note: a valid url_base must be provided
     
@@ -74,7 +74,7 @@ class MNSSubscriber < SPSSub
         
     id = Time.now.to_i.to_s
 
-    return_status = notices.add({description: msg, topic: topic}, id: id)        
+    return_status = notices.add(item: {description: msg, topic: topic}, id: id)        
     
     return if return_status == :duplicate
 
@@ -101,9 +101,9 @@ SQL
     db.execute("INSERT INTO notices (id, message) 
             VALUES (?, ?)", [id, msg])    
     
-    self.notice "%s/add: %s/status/%s"  % [@timeline, topic, id] 
+    self.notice "%s/add: %s/status/%s"  % [@timeline, topic, id] if @timeline
     
-    sleep 1.5
+    sleep 0.3
     
   end
 
