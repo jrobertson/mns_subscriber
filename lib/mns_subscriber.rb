@@ -3,6 +3,7 @@
 # file: mns_subscriber.rb
 
 
+require 'mtlite'
 require 'sps-sub'
 require "sqlite3"
 require 'fileutils'
@@ -74,7 +75,11 @@ class MNSSubscriber < SPSSub
         
     id = Time.now.to_i.to_s
 
-    return_status = notices.add(item: {description: msg, topic: topic}, id: id)        
+    h = {
+      description: MTLite.new(msg).to_html,
+      topic: topic
+    }
+    return_status = notices.add(item: h, id: id)        
     
     return if return_status == :duplicate
 
