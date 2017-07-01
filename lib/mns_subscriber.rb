@@ -61,20 +61,20 @@ class MNSSubscriber < SPSSub
       
     else
       
-      subtopic = a.last
-      add_notice(subtopic, msg)
+      subtopic, id = a[1..-1]
+      add_notice(subtopic, msg, id)
       
     end    
 
   end
 
-  def add_notice(topic, raw_msg)
+  def add_notice(topic, raw_msg, raw_id=Time.now)
 
     topic_dir = File.join(@filepath, topic)
     notices = DailyNotices.new topic_dir, @options.merge(identifier: topic, 
                                     title: topic.capitalize + ' daily notices')
 
-    id = Time.now.to_i
+    id = raw_id.to_i
     
     # strip out any JSON from the end of the message
     msg, raw_json = raw_msg.split(/(?=\{.*)/) 
@@ -87,13 +87,13 @@ class MNSSubscriber < SPSSub
     
     return if return_status == :duplicate
     
-    notices = RecordxSqlite.new(File.join(topic_dir, 'notices.db'),
+    rxnotices = RecordxSqlite.new(File.join(topic_dir, 'notices.db'),
       table: {notices: {id: 0, message: ''}})
-    notices.create id: id.to_s, message: msg
+    rxnotices.create id: id.to_s, message: msg
     
     if raw_json then
       
-      record = {id: id}.merge(JSON.parse(raw_json))
+      record = JSON.parse(raw_json)
       index = RecordxSqlite.new(File.join(topic_dir, 'index.db'),
         table: {items: record})
       index.create record
