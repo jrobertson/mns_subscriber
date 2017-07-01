@@ -5,9 +5,8 @@
 
 require 'mtlite'
 require 'sps-sub'
-require "sqlite3"
-require 'fileutils'
 require 'daily_notices'
+require 'recordx_sqlite'
 
 
 class MNSSubscriber < SPSSub
@@ -42,19 +41,23 @@ class MNSSubscriber < SPSSub
     puts "%s: %s %s"  % [topic, Time.now.to_s, msg.inspect]
     
     
-    case a.last
+    case a.last.to_sym
       
-    when 'profile'
+    when :profile
           
       update_attributes(:description, subtopic=a[-2], profile=msg)
 
-    when 'link'
+    when :link
           
       update_attributes(:link, subtopic=a[-2], link=msg)
       
-    when 'title'
+    when :title
           
       update_attributes(:title, subtopic=a[-2], title=msg)
+      
+    when :delete
+      
+      delete_notice(subtopic=a[-2], msg)
       
     else
       
@@ -65,50 +68,60 @@ class MNSSubscriber < SPSSub
 
   end
 
-  def add_notice(topic, msg)
+  def add_notice(topic, raw_msg)
 
     topic_dir = File.join(@filepath, topic)
     notices = DailyNotices.new topic_dir, @options.merge(identifier: topic, 
                                     title: topic.capitalize + ' daily notices')
-    
-    
-        
-    id = Time.now.to_i.to_s
 
+    id = Time.now.to_i
+    
+    # strip out any JSON from the end of the message
+    msg, raw_json = raw_msg.split(/(?=\{.*)/) 
+    
     h = {
       description: MTLite.new(msg).to_html,
       topic: topic
     }
-    return_status = notices.add(item: h, id: id)        
+    return_status = notices.add(item: h, id: id.to_s)
     
     return if return_status == :duplicate
-
-    dbfilename = File.join(topic_dir, topic + '.db')
     
-    if File.exists? dbfilename then
-
-      db = SQLite3::Database.new dbfilename   
+    notices = RecordxSqlite.new(File.join(topic_dir, 'notices.db'),
+      table: {notices: {id: 0, message: ''}})
+    notices.create id: id.to_s, message: msg
+    
+    if raw_json then
       
-    else
-
-      db = SQLite3::Database.new dbfilename   
+      record = {id: id}.merge(JSON.parse(raw_json))
+      index = RecordxSqlite.new(File.join(topic_dir, 'index.db'),
+        table: {items: record})
+      index.create record
       
-db.execute <<-SQL
-  create table notices (
-    ID INT PRIMARY KEY     NOT NULL,
-    MESSAGE TEXT
-  );
-SQL
-            
     end
-    
-  
-    db.execute("INSERT INTO notices (id, message) 
-            VALUES (?, ?)", [id, msg])    
     
     self.notice "%s/add: %s/status/%s"  % [@timeline, topic, id] if @timeline
     
     sleep 0.3
+    
+  end
+  
+  def delete_notice(topic, msg)
+    
+    topic_dir = File.join(@filepath, topic)
+    
+    notices = RecordxSqlite.new(File.join(topic_dir, 'notices.db'), 
+                                table: 'notices')
+    id = msg.to_i
+    notices.delete id
+    
+    indexdb = File.join(topic_dir, 'index.db')
+    
+    if File.exists? indexdb then
+      
+      RecordxSqlite.new(indexdb, table: 'items').delete id
+      
+    end
     
   end
 
