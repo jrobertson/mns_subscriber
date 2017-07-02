@@ -142,7 +142,11 @@ class MNSSubscriber < SPSSub
       a2.each {|x| x[:item_id] = x.delete :id }
 
       dx = Dynarex.new
-      dx.import a2
+      
+      dx.import a2.reverse      
+      dx.order ='descending'
+      #dx.default_key = 'item_id'      
+      
       dx.save File.join(topic_dir, 'index.xml')
       
     end        
