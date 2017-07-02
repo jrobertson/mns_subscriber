@@ -75,7 +75,7 @@ class MNSSubscriber < SPSSub
     notices = DailyNotices.new topic_dir, @options.merge(identifier: topic, 
                                     title: topic.capitalize + ' daily notices')
 
-    id = raw_id.to_i
+    id = (raw_id || Time.now).to_i
     
     # strip out any JSON from the end of the message
     msg, raw_json = raw_msg.split(/(?=\{.*)/) 
