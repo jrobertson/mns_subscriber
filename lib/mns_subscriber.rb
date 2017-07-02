@@ -26,6 +26,8 @@ class MNSSubscriber < SPSSub
 
     super(host: host, port: port)
     @filepath, @timeline = dir, timeline
+    
+    @index = nil
 
   end
 
@@ -57,14 +59,13 @@ class MNSSubscriber < SPSSub
       
     when :delete
       
-      subtopic = a[-2]
-      delete_notice(subtopic, msg)
-      update_index_xml(subtopic)
+      delete_notice(subtopic=a[-2], msg)
+      
     else
       
       subtopic, id = a[1..-1]
       add_notice(subtopic, msg, id)
-      update_index_xml(subtopic)
+      
     end    
 
   end
@@ -99,6 +100,8 @@ class MNSSubscriber < SPSSub
         table: {items: record})
       index.create record
       
+      update_index_xml(index, topic_dir)
+      
     end
     
     self.notice "%s/add: %s/status/%s"  % [@timeline, topic, id] if @timeline
@@ -120,43 +123,34 @@ class MNSSubscriber < SPSSub
     
     if File.exists? indexdb then
       
-      RecordxSqlite.new(indexdb, table: 'items').delete id
-      
+      index = RecordxSqlite.new(indexdb, table: 'items')
+      index.delete id
+      update_index_xml(index, topic_dir)
     end
     
   end
   
-  def update_index_xml(topic)
+  def update_index_xml(index, topic_dir)
+                            
+    # create the index.xml file
     
-    topic_dir = File.join(@filepath, topic)
-    indexdb = File.join(topic_dir, 'index.db')
-        
-    if File.exists? indexdb then
-            
-      items = RecordxSqlite.new(indexdb, table: 'items')
-      
-      # create the index.xml file
-      
-      a = items.order(:desc).first(15)
-      a2 = a.map(&:to_h)
-      a2.each {|x| x[:item_id] = x.delete :id }
+    a = index.order(:desc).first(15)
+    a2 = a.map(&:to_h)
+    a2.each {|x| x[:item_id] = x.delete :id }
 
-      dx = Dynarex.new
-      
-      dx.import a2
-      dx.order ='descending'
-      #dx.default_key = 'item_id'      
-      
-      dx.save File.join(topic_dir, 'index.xml')
-      
-    end        
+    dx = Dynarex.new    
+    dx.import a2
+    dx.order ='descending'
+    #dx.default_key = 'item_id'      
+    
+    dx.save File.join(topic_dir, 'index.xml')    
     
   end
 
   def update_attributes(attribute, topic, value)
     
     topic_dir = File.join(@filepath, topic)
-    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)              
+    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)
     notices.method((attribute.to_s + '=').to_sym).call(value)
     notices.save
   
