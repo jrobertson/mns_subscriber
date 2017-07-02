@@ -137,13 +137,13 @@ class MNSSubscriber < SPSSub
       
       # create the index.xml file
       
-      a = items.first(15)
+      a = items.order(:desc).first(15)
       a2 = a.map(&:to_h)
       a2.each {|x| x[:item_id] = x.delete :id }
 
       dx = Dynarex.new
       
-      dx.import a2.reverse      
+      dx.import a2
       dx.order ='descending'
       #dx.default_key = 'item_id'      
       
