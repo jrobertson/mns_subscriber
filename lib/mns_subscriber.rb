@@ -57,13 +57,14 @@ class MNSSubscriber < SPSSub
       
     when :delete
       
-      delete_notice(subtopic=a[-2], msg)
-      
+      subtopic = a[-2]
+      delete_notice(subtopic, msg)
+      update_index_xml(subtopic)
     else
       
       subtopic, id = a[1..-1]
       add_notice(subtopic, msg, id)
-      
+      update_index_xml(subtopic)
     end    
 
   end
@@ -122,6 +123,29 @@ class MNSSubscriber < SPSSub
       RecordxSqlite.new(indexdb, table: 'items').delete id
       
     end
+    
+  end
+  
+  def update_index_xml(topic)
+    
+    topic_dir = File.join(@filepath, topic)
+    indexdb = File.join(topic_dir, 'index.db')
+        
+    if File.exists? indexdb then
+            
+      items = RecordxSqlite.new(indexdb, table: 'items')
+      
+      # create the index.xml file
+      
+      a = items.first(15)
+      a2 = a.map(&:to_h)
+      a2.each {|x| x[:item_id] = x.delete :id }
+
+      dx = Dynarex.new
+      dx.import a2
+      dx.save File.join(topic_dir, 'index.xml')
+      
+    end        
     
   end
 
