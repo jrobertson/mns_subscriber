@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'mns_subscriber'
-  s.version = '0.4.6'
+  s.version = '0.4.7'
   s.summary = "Creates microblog posts from different identities by " +  \
                 "subscribing to the SPS topic 'notices/*' by default."
   s.authors = ['James Robertson']
