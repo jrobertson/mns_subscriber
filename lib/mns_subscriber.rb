@@ -82,7 +82,8 @@ class MNSSubscriber < SPSSub
     msg, raw_json = raw_msg.split(/(?=\{.*)/) 
     
     h = {
-      description: MTLite.new(msg).to_html,
+      description: MTLite.new(msg)
+          .to_html(para: true, ignore_domainlabel:true),
       topic: topic
     }
     return_status = notices.add(item: h, id: id.to_s)
