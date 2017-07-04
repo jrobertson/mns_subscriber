@@ -81,11 +81,23 @@ class MNSSubscriber < SPSSub
     # strip out any JSON from the end of the message
     msg, raw_json = raw_msg.split(/(?=\{.*)/) 
     
+    mtlite = MTLite.new(msg)
+    
+    desc = if mtlite.to_html(para: false) =~ /<\w+/ then
+      mtlite.to_html(para: true, ignore_domainlabel:true)
+    else
+      mtlite.to_s
+    end
+    
+    title = mtlite.to_s.lines.first.chomp
+    title = title[0..136] + ' ...' if title.length > 140
+    
     h = {
-      description: MTLite.new(msg)
-          .to_html(para: true, ignore_domainlabel:true),
+      title: title,
+      description: desc,
       topic: topic
     }
+
     return_status = notices.add(item: h, id: id.to_s)
     
     return if return_status == :duplicate
