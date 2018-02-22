@@ -12,7 +12,10 @@ require 'recordx_sqlite'
 class MNSSubscriber < SPSSub
 
   def initialize(host: 'sps', port: 59000, dir: '.', options: {}, 
-                 timeline: nil)
+                 timeline: nil, log: nil)
+    
+    @log = log
+    log.info 'mns_subscriber/initialize: active' if log
     
     # note: a valid url_base must be provided
     
@@ -24,7 +27,7 @@ class MNSSubscriber < SPSSub
       target_xslt: '/xsl/page.xsl'      
     }.merge(options)
 
-    super(host: host, port: port)
+    super(host: host, port: port, log: log)
     @filepath, @timeline = dir, timeline
     
     @index = nil
@@ -38,6 +41,8 @@ class MNSSubscriber < SPSSub
   private
 
   def ontopic(topic, msg)
+    
+    @log.info 'mns_subscriber/ontopic: topic: ' + topic.inspect if @topic
 
     a = topic.split('/')
     puts "%s: %s %s"  % [topic, Time.now.to_s, msg.inspect]
@@ -72,9 +77,10 @@ class MNSSubscriber < SPSSub
 
   def add_notice(topic, raw_msg, raw_id=Time.now)
 
+    @log.info 'mns_subscriber/add_notice: active' if @log
     topic_dir = File.join(@filepath, topic)
     notices = DailyNotices.new topic_dir, @options.merge(identifier: topic, 
-                                    title: topic.capitalize + ' daily notices')
+                        title: topic.capitalize + ' daily notices', log: @log)
 
     id = (raw_id || Time.now).to_i
     
