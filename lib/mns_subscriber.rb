@@ -110,7 +110,12 @@ class MNSSubscriber < SPSSub
     
     rxnotices = RecordxSqlite.new(File.join(topic_dir, 'notices.db'),
       table: {notices: {id: 0, message: ''}})
-    rxnotices.create id: id.to_s, message: msg
+    
+    begin
+      rxnotices.create id: id.to_s, message: msg
+    rescue
+      puts 'warning: rxnotices.create -> ' + ($!).inspect
+    end
     
     if raw_json then
       
