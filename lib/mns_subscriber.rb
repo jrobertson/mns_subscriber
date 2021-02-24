@@ -62,6 +62,10 @@ class MNSSubscriber < SPSSub
           
       update_attributes(:title, subtopic=a[-2], title=msg)
       
+    when :image
+          
+      update_attributes(:image, subtopic=a[-2], title=msg)      
+      
     when :delete
       
       delete_notice(subtopic=a[-2], msg)
