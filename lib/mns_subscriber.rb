@@ -12,7 +12,7 @@ require 'recordx_sqlite'
 class MNSSubscriber < SPSSub
 
   def initialize(host: 'sps', port: 59000, dir: '.', options: {}, 
-                 timeline: nil, log: nil)
+                 timeline: nil, log: nil, hashtag_url: nil)
     
     @log = log
     log.info 'mns_subscriber/initialize: active' if log
@@ -31,6 +31,21 @@ class MNSSubscriber < SPSSub
     @filepath, @timeline = dir, timeline
     
     @index = nil
+    @hashtags = nil
+    
+    
+    if hashtag_url then
+      
+      @hashtag_url = @options[:url_base] + hashtag_url.sub(/^\//,'')      
+      
+      hashtag_path = File.join(dir, 'hashtag')
+      tagdb = File.join(hashtag_path, 'index.db')
+      FileUtils.mkdir_p File.dirname(tagdb)
+      
+      h = {hashtags: {id: '', tag: '', topic: '', noticeid: ''}}
+      @hashtags = RecordxSqlite.new(tagdb, table: h )            
+
+    end
 
   end
 
@@ -79,14 +94,15 @@ class MNSSubscriber < SPSSub
 
   end
 
-  def add_notice(topic, raw_msg, raw_id=Time.now)
+  def add_notice(topic, raw_msg, raw_id=nil)
 
     @log.info 'mns_subscriber/add_notice: active' if @log
     topic_dir = File.join(@filepath, topic)
     notices = DailyNotices.new topic_dir, @options.merge(identifier: topic, 
                         title: topic.capitalize + ' daily notices', log: @log)
 
-    id = (raw_id || Time.now).to_i
+    t = Time.now
+    id = (raw_id || t.to_i.to_s + t.strftime("%2N")).to_i
     
     # strip out any JSON from the end of the message
     msg, raw_json = raw_msg.split(/(?=\{.*)/) 
@@ -97,6 +113,27 @@ class MNSSubscriber < SPSSub
       mtlite.to_html(para: true, ignore_domainlabel:true)
     else
       mtlite.to_s
+    end
+    
+    if @hashtag_url then
+
+      tags = desc.scan(/(?<=#)\w+/)
+      
+      desc.gsub!(/#\w+/) do |x| 
+        "<a href='%s%s'>%s</a>" % [@hashtag_url, x[1..-1], x]
+      end
+      
+      # add the record to the database      
+      tags.each do |tag|
+        
+        t = Time.now
+        id2 = (t.to_i.to_s + t.strftime("%2N")).to_i        
+        h = {id: id2, tag: tag, topic: topic, noticeid: id}
+
+        @hashtags.create h if @hashtags
+        
+      end
+      
     end
     
     title = mtlite.to_s.lines.first.chomp
@@ -113,10 +150,10 @@ class MNSSubscriber < SPSSub
     return if return_status == :duplicate
     
     rxnotices = RecordxSqlite.new(File.join(topic_dir, 'notices.db'),
-      table: {notices: {id: 0, message: ''}})
+      table: {notices: {id: 0, description: '', message: ''}})
     
     begin
-      rxnotices.create id: id.to_s, message: msg
+      rxnotices.create id: id.to_s, description: desc, message: msg
     rescue
       puts 'warning: rxnotices.create -> ' + ($!).inspect
     end
