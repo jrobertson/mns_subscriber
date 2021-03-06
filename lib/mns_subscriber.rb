@@ -24,7 +24,9 @@ class MNSSubscriber < SPSSub
       dx_xslt: '/xsl/dynarex.xsl', 
       rss_xslt: '/xsl/feed.xsl', 
       target_page: :page, 
-      target_xslt: '/xsl/page.xsl'      
+      target_xslt: '/xsl/page.xsl',
+      local_media_path: '/home/user/media',
+      url_media_path: 'http://media.yourwebsitehere.co.uk/'
     }.merge(options)
 
     super(host: host, port: port, log: log)
@@ -85,6 +87,40 @@ class MNSSubscriber < SPSSub
       
       delete_notice(subtopic=a[-2], msg)
       
+    when :json
+      
+      # JSON contains a message and 1 or more media files    
+      h = JSON.parse msg, symbolize_names: true
+      
+      subtopic = a[-2]
+      
+      t = Time.now
+      id = t.to_i.to_s + t.strftime("%2N")
+      
+      filepath = File.join(@options[:local_media_path], 'images')
+            
+      a = h[:files].map.with_index do |f,i|
+                
+        file = "%s%s" % [(id.to_i + i+1).to_s(36).reverse, File.extname(f)]
+        dest = File.join(filepath, file)
+        
+        FileUtils.cp f, dest
+        FileUtils.chmod 0755, dest
+        
+        dir = File.extname(file) =~ /\.(?:jpg|png)/ ? 'images' : ''
+        url = [@options[:url_media_path], dir, file].join('/')
+    
+        href = [@options[:url_base].sub(/\/$/,''), subtopic, 'status', id, 
+                'photo', (i+1).to_s ].join('/')
+        "<a href='%s'><img class='img1' src='%s'/></a>" % [href, url]
+            
+      end
+      
+      div = a.any? ? "<div id='media'>#{a.join}</div>" : ''
+      
+      add_notice(subtopic, h[:msg] + "\n" + div, id)      
+      
+      
     else
       
       subtopic, id = a[1..-1]
@@ -98,7 +134,12 @@ class MNSSubscriber < SPSSub
 
     @log.info 'mns_subscriber/add_notice: active' if @log
     topic_dir = File.join(@filepath, topic)
-    notices = DailyNotices.new topic_dir, @options.merge(identifier: topic, 
+    
+    options = @options.clone
+    options.delete :local_media_path
+    options.delete :url_media_path
+    
+    notices = DailyNotices.new topic_dir, options.merge(identifier: topic, 
                         title: topic.capitalize + ' daily notices', log: @log)
 
     t = Time.now
@@ -177,11 +218,16 @@ class MNSSubscriber < SPSSub
   
   def delete_notice(topic, msg)
     
+    
     topic_dir = File.join(@filepath, topic)
+    
+    id = msg.to_i
+    
+    feed = DailyNotices.new topic_dir, log: @log  
+    feed.delete id
     
     notices = RecordxSqlite.new(File.join(topic_dir, 'notices.db'), 
                                 table: 'notices')
-    id = msg.to_i
     notices.delete id
     
     indexdb = File.join(topic_dir, 'index.db')
