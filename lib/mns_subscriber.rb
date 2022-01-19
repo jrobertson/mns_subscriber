@@ -16,7 +16,7 @@ module MNSSubscriber
     include RXFHelperModule
     using ColouredText
 
-    def initialize(sps=nil, dir: '.', options: {}, timeline: nil,
+    def initialize(sps=nil, dir: '.', db_path: '.', options: {}, timeline: nil,
                   hashtag_url: nil, log: nil, debug: false)
 
       @sps, @log, @debug = sps, log, debug
@@ -33,7 +33,7 @@ module MNSSubscriber
       }.merge(options)
 
 
-      @filepath, @timeline = dir, timeline
+      @filepath, @db_path, @timeline = dir, db_path, timeline
 
       @index = nil
       @hashtags = nil
@@ -44,8 +44,9 @@ module MNSSubscriber
         @hashtag_url = @options[:url_base] + hashtag_url.sub(/^\//,'')
 
         hashtag_path = File.join(dir, 'hashtag')
-        tagdb = File.join(hashtag_path, 'index.db')
-        FileX.mkdir_p File.dirname(tagdb)
+        tagdb = File.join(db_path, 'hashtag', 'index.db')
+        tagdb_dir = File.join(hashtag_path, 'index.db')
+        FileX.mkdir_p File.dirname(tagdb_dir)
 
         h = {hashtags: {id: '', tag: '', topic: '', noticeid: ''}}
         @hashtags = RecordxSqlite.new(tagdb, table: h )
@@ -111,6 +112,7 @@ module MNSSubscriber
             file
 
           end
+
           puts 'scale: ' + scale.inspect
           index = scale[2] ? 2 : (scale[1] ? 1 : 0)
           file1 = scale[index]
@@ -185,13 +187,20 @@ module MNSSubscriber
     def add_notice(topic, raw_msg, raw_id=nil, card=nil)
 
       @log.info 'mns_subscriber/add_notice: active' if @log
+
+      if @log then
+        @log.debug 'mns_subscriber/add_notice: @db_path:' + @db_path.inspect
+      end
+
       topic_dir = File.join(@filepath, 'u', topic)
+      topic_db_dir = File.join(@db_path, 'u', topic)
+
 
       options = @options.clone
       options.delete :local_media_path
       options.delete :url_media_path
 
-      notices = DailyNotices.new topic_dir, options.merge(identifier: topic,
+      notices = DailyNotices.new topic_dir, **options.merge(identifier: topic,
                           title: topic.capitalize + ' daily notices', log: @log)
 
       t = Time.now
@@ -250,7 +259,7 @@ module MNSSubscriber
 
       return if return_status == :duplicate
 
-      rxnotices = RecordxSqlite.new(File.join(topic_dir, 'notices.db'),
+      rxnotices = RecordxSqlite.new(File.join(topic_db_dir, 'notices.db'),
         table: {notices: {id: 0, description: '', message: ''}})
 
       begin
@@ -262,7 +271,7 @@ module MNSSubscriber
       if raw_json then
 
         record = JSON.parse(raw_json)
-        index = RecordxSqlite.new(File.join(topic_dir, 'index.db'),
+        index = RecordxSqlite.new(File.join(topic_db_dir, 'index.db'),
           table: {items: record})
         index.create record
 
@@ -279,17 +288,18 @@ module MNSSubscriber
     def delete_notice(topic, msg)
 
       topic_dir = File.join(@filepath, topic)
+      topic_db_dir = File.join(@db_path, topic)
 
       id = msg.to_i
 
       feed = DailyNotices.new topic_dir, log: @log
       feed.delete id
 
-      notices = RecordxSqlite.new(File.join(topic_dir, 'notices.db'),
+      notices = RecordxSqlite.new(File.join(topic_db_dir, 'notices.db'),
                                   table: 'notices')
       notices.delete id
 
-      indexdb = File.join(topic_dir, 'index.db')
+      indexdb = File.join(topic_db_dir, 'index.db')
 
       if File.exists? indexdb then
 
@@ -385,7 +395,7 @@ module MNSSubscriber
     def update_attributes(attribute, topic, value)
 
       topic_dir = File.join(@filepath, topic)
-      notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)
+      notices = DailyNotices.new topic_dir, **@options.merge(identifier: topic)
       notices.method((attribute.to_s + '=').to_sym).call(value)
       notices.save
 
@@ -394,7 +404,7 @@ module MNSSubscriber
     def update_profile(topic, h)
 
       topic_dir = File.join(@filepath, topic)
-      notices = DailyNotices.new topic_dir, @options.merge(identifier: topic)
+      notices = DailyNotices.new topic_dir, **@options.merge(identifier: topic)
 
       valid_keys = %i(title identifier image bio location website banner_image)
 
@@ -416,20 +426,20 @@ module MNSSubscriber
 
   class Client < SPSSub
 
-    def initialize(host: 'sps', port: 59000, dir: '.', options: {},
-                  timeline: nil, log: nil, hashtag_url: nil)
+    def initialize(host: 'sps', port: 59000, dir: '.', db_path: '.',
+                   options: {}, timeline: nil, log: nil, hashtag_url: nil)
 
       @log = log
       log.info 'mns_subscriber/initialize: active' if log
-      @nm = NoticeMgr.new(self, dir: dir, options: options, timeline: timeline,
-                    hashtag_url: hashtag_url, debug: true)
+      @nm = NoticeMgr.new(self, dir: dir, db_path: db_path, options: options, timeline: timeline,
+                    hashtag_url: hashtag_url, log: log, debug: true)
 
       super(host: host, port: port, log: log)
 
     end
 
-    def subscribe(topic='notice/*')
-      super(topic)
+    def subscribe(topicx='notice/*', topic: topicx)
+      super(topic: topic)
     end
 
     private
